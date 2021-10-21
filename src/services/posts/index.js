@@ -1,10 +1,15 @@
 import createHttpError from "http-errors";
 import uniqid from "uniqid";
 import express from "express";
+
+import path from "path";
 import multer from "multer";
 import { getPosts, savePosts, savePostPic } from "../../lib/fs-tools.js";
+import fs from "fs-extra";
 
 const postsRouter = express.Router();
+
+const publicFolder = path.join(process.cwd(), "public");
 
 postsRouter.get("/", async (req, res, next) => {
   try {
@@ -34,11 +39,12 @@ postsRouter.get("/:postId", async (req, res, next) => {
 });
 
 postsRouter.post(
-  "/",
+  "/:id",
   multer().single("articleCover"),
   async (req, res, next) => {
     try {
       const { originalname, buffer } = req.file;
+
       await savePostPic(originalname, buffer);
       const newPost = {
         ...req.body,
@@ -62,16 +68,24 @@ postsRouter.put(
   multer().single("articleCover"),
   async (req, res, next) => {
     try {
-      const { originalname } = req.file;
+      const { originalname, buffer } = req.file;
+
+      const extension = path.extname(originalname);
+
+      const fileName = `${req.params.postId}${extension}`;
+
+      await fs.writeFile(path.join(publicFolder, fileName), buffer);
+
       const posts = await getPosts();
-      const index = posts.findIndex((post) => post.__id === req.params.postId);
+
+      const index = posts.findIndex((post) => post._id === req.params.postId);
 
       if (index !== -1) {
         const postToModify = posts[index];
         const updatedPost = {
           ...postToModify,
           ...req.body,
-          cover: `http://localhost:3000/${originalname}`,
+          cover: `http://localhost:3000/${fileName}`,
           updatedAt: new Date(),
         };
 

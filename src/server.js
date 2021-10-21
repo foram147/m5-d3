@@ -2,6 +2,8 @@ import express from "express";
 import authorsRouter from "./services/authors/index.js";
 import postsRouter from "./services/posts/index.js";
 import listEndpoints from "express-list-endpoints";
+
+import path from "path";
 import {
   badRequest,
   forbidden,
@@ -13,6 +15,7 @@ import {
 const server = express();
 const port = 3000;
 
+server.use(express.static(path.join(process.cwd(), "public")));
 server.use(express.json());
 // server.use(cors())
 

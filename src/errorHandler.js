@@ -1,5 +1,5 @@
 export const badRequest = (error, req, res, next) => {
-  console.log(`*********${error}`);
+  console.log(`i m called ${error}`);
   if (error.status === 400) {
     res.status(400).send();
   } else {

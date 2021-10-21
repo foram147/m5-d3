@@ -1,66 +1,105 @@
-import fs from "fs";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
+import createHttpError from "http-errors";
 import uniqid from "uniqid";
 import express from "express";
-
-const postsJsonPath = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "posts.json"
-);
-const getPosts = () => JSON.parse(fs.readFileSync(postsJsonPath));
-const rewritePosts = (contentData) =>
-  fs.writeFileSync(postsJsonPath, JSON.stringify(contentData));
+import multer from "multer";
+import { getPosts, savePosts, savePostPic } from "../../lib/fs-tools.js";
 
 const postsRouter = express.Router();
 
-// const filePath = fileURLToPath(import.meta.url)
-// const folderPath = dirname(filePath)
-// const jsonFilePath = join(folderPath, "authors.json")
+postsRouter.get("/", async (req, res, next) => {
+  try {
+    const posts = await getPosts();
+    console.log(posts);
 
-postsRouter.get("/", (request, response) => {
-  const posts = getPosts();
-  console.log(posts);
-
-  response.send(posts);
+    res.send(posts);
+  } catch (error) {
+    next(error);
+  }
 });
 
-postsRouter.get("/:postId", (req, res) => {
-  const posts = getPosts();
-  const post = posts.find((post) => post.id === req.params.postId);
-  res.send(author);
+postsRouter.get("/:postId", async (req, res, next) => {
+  try {
+    const posts = await getPosts();
+    const post = posts.find((post) => post._id === req.params.postId);
+
+    const authorId = post.author.id;
+    if (post || authorId) {
+      res.send(posts);
+    } else {
+      next(createHttpError(404), `Invalid Post id`);
+    }
+  } catch (error) {
+    next(error);
+  }
 });
 
-postsRouter.post("/", (req, res) => {
-  const newPost = { ...req.body, id: uniqid() };
-  // console.log(newAuthor)
-  const posts = getPosts();
-  posts.push(newPost);
-  rewritePosts(posts);
-  res.status(201).send(newPost);
-});
+postsRouter.post(
+  "/",
+  multer().single("articleCover"),
+  async (req, res, next) => {
+    try {
+      const { originalname, buffer } = req.file;
+      await savePostPic(originalname, buffer);
+      const newPost = {
+        ...req.body,
+        cover: `http://localhost:3000/${originalname}`,
+        id: uniqid(),
+        createdAt: new Date(),
+      };
+      // console.log(newAuthor)
+      const posts = await getPosts();
+      posts.push(newPost);
+      await savePosts(posts);
+      res.status(201).send(newPost);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
-postsRouter.put("/:postId", (req, res) => {
-  const posts = getPosts();
-  const index = posts.findIndex((post) => post.id === req.params.postId);
+postsRouter.put(
+  "/:postId",
+  multer().single("articleCover"),
+  async (req, res, next) => {
+    try {
+      const { originalname } = req.file;
+      const posts = await getPosts();
+      const index = posts.findIndex((post) => post.__id === req.params.postId);
 
-  const postToModify = posts[index];
-  const updatedFields = req.body;
+      if (index !== -1) {
+        const postToModify = posts[index];
+        const updatedPost = {
+          ...postToModify,
+          ...req.body,
+          cover: `http://localhost:3000/${originalname}`,
+          updatedAt: new Date(),
+        };
 
-  const updatedPost = { ...postToModify, ...updatedFields };
+        posts[index] = updatedPost;
+        await savePosts(posts);
+        res.send(updatedPost);
 
-  posts[index] = updatedPost;
+        res.send(updatedPost);
+      } else {
+        next(createHttpError(404), `No post found with id of`);
+      }
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 
-  rewritePosts(posts);
-
-  res.send(updatedPost);
-});
-
-postsRouter.delete("/:postId", (req, res) => {
-  const posts = getPosts();
-  const remainingPosts = posts.filter((post) => post.id !== req.params.postId);
-  rewritePosts(remainingPosts);
-  res.status(204).send();
+postsRouter.delete("/:postId", async (req, res, next) => {
+  try {
+    const posts = await getPosts();
+    const remainingPosts = posts.filter(
+      (post) => post._id !== req.params.postId
+    );
+    await savePosts(remainingPosts);
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
 });
 
 export default postsRouter;
